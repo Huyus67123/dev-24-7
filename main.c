@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -47,8 +46,10 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 char rxByte=0;
-uint8_t *txByte="hello";
-uint8_t pwmFlag=0;
+uint16_t count = 999;
+uint8_t flag=0;
+uint8_t mod=0;
+uint32_t last_tick=0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -63,43 +64,6 @@ static void MX_TIM1_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
-	 if (huart->Instance == USART1) {
-		switch(rxByte){
-		case '1':
-			HAL_TIM_Base_Stop_IT(&htim1);
-			pwmFlag=0;
-			HAL_TIM_Base_Stop_IT(&htim2);
-			__HAL_TIM_SET_AUTORELOAD(&htim2, 4999);
-			HAL_TIM_Base_Start_IT(&htim2);
-			HAL_UART_Transmit(&huart1, (uint8_t*) txByte,sizeof(txByte),1000);
-			break;
-		case '2':
-			HAL_TIM_Base_Stop_IT(&htim1);
-			pwmFlag=0;
-			HAL_TIM_Base_Stop_IT(&htim2);
-			__HAL_TIM_SET_AUTORELOAD(&htim2, 9999);
-			HAL_TIM_Base_Start_IT(&htim2);
-			HAL_UART_Transmit(&huart1, (uint8_t*) txByte,sizeof(txByte),1000);
-			break;
-		case '3':
-			HAL_GPIO_WritePin(led_GPIO_Port,led_Pin,RESET);
-			pwmFlag=1;
-			__HAL_TIM_ENABLE_IT(&htim1, TIM_IT_UPDATE);
-			HAL_TIM_Base_Stop_IT(&htim2);
-			HAL_TIM_Base_Start_IT(&htim1);
-			HAL_TIM_PWM_Start_IT(&htim1,TIM_CHANNEL_1);
-			HAL_UART_Transmit(&huart1, (uint8_t*) txByte,sizeof(txByte),1000);
-			break;
-		}
-		HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxByte, 1);
-	 }
-}
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
-	if(htim->Instance == TIM2){
-		HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin);
-	}
-}
 
 /* USER CODE END 0 */
 
@@ -137,19 +101,12 @@ int main(void)
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   HAL_UART_Receive_IT(&huart1,(uint8_t*)&rxByte,1);
-  HAL_TIM_Base_Start_IT(&htim2);
-  uint16_t count = 999;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  if(pwmFlag==1){
-	      __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, count);
-	      	  if(count-- == 0) count = 999;
-	      	  HAL_Delay (5);
-	  }
 
     /* USER CODE END WHILE */
 
@@ -355,6 +312,12 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin : button_Pin */
+  GPIO_InitStruct.Pin = button_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(button_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pin : led_Pin */
   GPIO_InitStruct.Pin = led_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -362,12 +325,84 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(led_GPIO_Port, &GPIO_InitStruct);
 
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
+void changemod(uint8_t mod){
+	HAL_TIM_Base_Stop_IT(&htim1);
+	HAL_TIM_PWM_Stop_IT(&htim1,TIM_CHANNEL_1);
+	HAL_TIM_Base_Stop_IT(&htim2);
+	__HAL_TIM_SET_COUNTER(&htim2, 0);
+	__HAL_TIM_SET_COUNTER(&htim1, 0);
+	switch(mod){
+		case 1:
+			__HAL_TIM_SET_AUTORELOAD(&htim2, 4999);
+			HAL_TIM_Base_Start_IT(&htim2);
+			HAL_UART_Transmit(&huart1, (uint8_t*)" Mode 1\n", strlen(" Mode 1\n"), 1000);
+			break;
+		case 2:
+			__HAL_TIM_SET_AUTORELOAD(&htim2, 9999);
+			HAL_TIM_Base_Start_IT(&htim2);
+			HAL_UART_Transmit(&huart1, (uint8_t*)" Mode 2\n", strlen(" Mode 2\n"), 1000);
+			break;
+		case 3:
+			HAL_TIM_Base_Start_IT(&htim1);
+			HAL_GPIO_WritePin(led_GPIO_Port,led_Pin,RESET);
+			HAL_TIM_PWM_Start_IT(&htim1,TIM_CHANNEL_1);
+			HAL_UART_Transmit(&huart1, (uint8_t*)" Mode 3\n", strlen(" Mode 3\n"), 1000);
+			break;
+	}
+}
 
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
+	 if (huart->Instance == USART1) {
+		 changemod(rxByte-'0');
+		 HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxByte, 1);
+	 }
+}
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
+	if(htim->Instance == TIM2){
+		HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin);
+	}
+}
+void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim){
+	if(htim->Instance == TIM1){
+		if(flag==0){
+			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, count);
+			if(count-- == 1) flag=1;
+		}
+		else{
+			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, count);
+			if(count++ == 999) flag=0;
+		}
+	}
+}
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
+	if(GPIO_Pin==button_Pin){
+		if(HAL_GetTick() - last_tick > 200){
+			mod++;
+			if(mod > 3) mod = 1;
+			changemod(mod);
+			last_tick = HAL_GetTick();
+		}
+	}
+	//if(GPIO_Pin==button_wait_Pin){
+		//if(HAL_GetTick() - last_tick > 200){
+		//	last_tick = HAL_GetTick();
+			//if(HAL_GetTick() - last_tick > 3000){
+				//HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin);
+
+
+			//}
+		//}
+	//}
+}
 /* USER CODE END 4 */
 
 /**
