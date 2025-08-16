@@ -40,6 +40,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc1;
+
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 
@@ -52,6 +54,8 @@ uint8_t flag=0;
 uint8_t flag_nhan=0;
 uint8_t mod;
 uint32_t last_tick=0;
+uint32_t last_get=0;
+uint16_t adc_value;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -60,8 +64,15 @@ static void MX_GPIO_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM1_Init(void);
+static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
-
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
+void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim);
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
+void printf_uart(const char *mess);
+void changeARR(uint16_t ARR);
+void changemod(uint8_t mod);
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -101,9 +112,10 @@ int main(void)
   MX_TIM2_Init();
   MX_USART1_UART_Init();
   MX_TIM1_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UART_Receive_IT(&huart1,(uint8_t*)&rxByte,1);
   changemod(1);
+  HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxByte, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -126,6 +138,7 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -152,6 +165,59 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
+  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV2;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+
+  /** Common config
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.NbrOfConversion = 1;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+
+  /* USER CODE END ADC1_Init 2 */
+
 }
 
 /**
@@ -174,7 +240,7 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 80-1;
+  htim1.Init.Prescaler = 80;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim1.Init.Period = 999;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -352,16 +418,17 @@ void printf_uart(const char *mess) {
 }
 
 void changeARR(uint16_t ARR){
-	HAL_TIM_Base_Stop_IT(&htim2);
-	__HAL_TIM_SET_COUNTER(&htim2, 0);
 	__HAL_TIM_SET_AUTORELOAD(&htim2, ARR);
 	HAL_TIM_Base_Start_IT(&htim2);
-	HAL_TIM_Base_Stop_IT(&htim1);
 	HAL_TIM_PWM_Stop_IT(&htim1,TIM_CHANNEL_1);
 	__HAL_TIM_SET_COUNTER(&htim1, 0);
 }
 
 void changemod(uint8_t mod){
+	HAL_TIM_Base_Stop_IT(&htim2);
+	HAL_TIM_Base_Stop_IT(&htim1);
+	__HAL_TIM_SET_COUNTER(&htim2, 0);
+	HAL_ADC_Stop_IT(&hadc1);
 	switch(mod){
 		case 1:
 			changeARR(4999);
@@ -372,11 +439,21 @@ void changemod(uint8_t mod){
 			printf_uart(" Mode 2\n");
 			break;
 		case 3:
-			HAL_TIM_Base_Stop_IT(&htim2);
 			HAL_TIM_Base_Start_IT(&htim1);
 			HAL_GPIO_WritePin(led_GPIO_Port,led_Pin,RESET);
 			HAL_TIM_PWM_Start_IT(&htim1,TIM_CHANNEL_1);
 			printf_uart(" Mode 3\n");
+			break;
+		case 4:
+			changeARR(2999);
+			printf_uart(" Mode 4\n");
+			break;
+		case 5:
+			HAL_TIM_Base_Start_IT(&htim1);
+			HAL_GPIO_WritePin(led_GPIO_Port,led_Pin,RESET);
+			HAL_TIM_PWM_Start_IT(&htim1,TIM_CHANNEL_1);
+			printf_uart(" Mode 5\n");
+			HAL_ADC_Start_IT(&hadc1);
 			break;
 	}
 }
@@ -388,20 +465,28 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 		 HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxByte, 1);
 	 }
 }
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM2){
 		HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin);
 	}
 }
+
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM1){
-		if(flag==0){
-			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, count);
-			if(count-- == 1) flag=1;
-		}
-		else{
-			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, count);
-			if(count++ == 999) flag=0;
+		if(mod == 3){
+			if(flag==0){
+				__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, count);
+				if(count-- == 1) {
+					flag=1;
+				}
+			}
+			else{
+				__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, count);
+				if(count++ == 1000) {
+					flag=0;
+				}
+			}
 		}
 	}
 }
@@ -409,7 +494,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if(GPIO_Pin==button_Pin){
 		if(HAL_GetTick() - last_tick > 200){
 			mod++;
-			if(mod > 3) mod = 1;
+			if(mod > 3 && mod < 5) mod = 5;
+			if(mod > 5) mod = 1;
 			changemod(mod);
 			last_tick = HAL_GetTick();
 		}
@@ -417,9 +503,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	else if(GPIO_Pin==Nhan3s_Pin){
 		if(HAL_GetTick() - last_tick > 50){
 			if(flag_nhan==0) {
-				changeARR(3000);
+				changemod(4);
 				flag_nhan++;
-				printf_uart(" Mode 4\n");
 			}
 			else{
 				flag_nhan=0;
@@ -430,6 +515,23 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 		}
 	}
 }
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
+    if(hadc->Instance == ADC1){
+        if(mod == 5){
+        	if(HAL_GetTick() - last_get > 200){
+        		adc_value= HAL_ADC_GetValue(&hadc1);
+        		uint16_t pwm_value = (adc_value * __HAL_TIM_GET_AUTORELOAD(&htim1))/4000;
+				__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pwm_value);
+				char buffer[20];
+				sprintf(buffer, "ADC: %d\r\n",  pwm_value);
+				printf_uart(buffer);
+				last_get = HAL_GetTick();
+        	}
+        }
+    }
+}
+
 /* USER CODE END 4 */
 
 /**
