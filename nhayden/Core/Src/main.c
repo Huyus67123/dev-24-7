@@ -15,6 +15,27 @@
   *
   ******************************************************************************
   */
+/*
+TIM1: ARR 1000 , PSC 80, PULSE 950(gia tri ban dau)
+TIM2: ARR 4999 , PSC 7999 -> 1 cycle = 1ms -> 5000 cycles = 5s
+UART: Baudrate: 9600 PA9 Tx PA10 Rx
+ADC: PA1
+EXTI: PA0(EXTI0) gọi khi kích lên, PA3(EXTI3) gọi khi xung thay đổi
+Target (nói sơ bộ về quy trình tụi em làm) :
+ 	-task 1 TIMER, PWM
+		+ khởi tạo itr của timer để sử dụng Timer 2 nháy đèn 5s
+		+ tìm hiểu hàm thay đổi giá trị ARR và reset timer
+		+ viết hàm thay đổi của PWM khi được dùng
+		+ dùng uart để thay đổi chế độ sử dụng
+	-task 2 EXIT
+		+ viết thêm 1 hàm riêng để đổi mod và sửa lại hàm uart cho phù hợp
+		+ thêm nút nhấn tao ham callback exit de thuc hien ngat
+		+ nhấn đổi mod và gọi hàm đổi
+		+ nhấn giữ và đổi ARR khi thả quay về mod cũ
+	-task 3 ADC
+		+ dùng PA1 để làm chân đọc ADC
+		+ biến đổi dữ liệu đọc được và gắn vào PWM để thay đổi độ sáng
+*/
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -48,13 +69,12 @@ TIM_HandleTypeDef htim2;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-char rxByte=0;
-uint16_t count = 999;
-uint8_t flag=0;
-uint8_t flag_nhan=0;
-uint8_t mod;
-uint32_t last_tick=0;
-uint32_t last_get=0;
+char rxByte=0; //bien luu gia tri UART de truyen
+uint16_t count = 999;// bien dem dung trong sang dan tat dan
+uint8_t flag=0;//luu gia tri dung trong if eles cua PWM
+uint8_t flag_nhan=0;//luu gia tri khi nhan va tha cua nhun nhan
+uint8_t mod; //luu che do
+uint32_t last_tick=0;// bien luu lan nhan cuoi
 uint16_t adc_value;
 /* USER CODE END PV */
 
@@ -413,10 +433,12 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+// hàm in ra bằng UART dùng để gọi ngắn gọn hơn
 void printf_uart(const char *mess) {
     HAL_UART_Transmit(&huart1, (uint8_t *)mess, strlen(mess), 500);
 }
 
+//Hàm thay đổi ARR của TIM2
 void changeARR(uint16_t ARR){
 	__HAL_TIM_SET_AUTORELOAD(&htim2, ARR);
 	HAL_TIM_Base_Start_IT(&htim2);
@@ -424,6 +446,7 @@ void changeARR(uint16_t ARR){
 	__HAL_TIM_SET_COUNTER(&htim1, 0);
 }
 
+// Hàm thay đổi mod
 void changemod(uint8_t mod){
 	HAL_TIM_Base_Stop_IT(&htim2);
 	HAL_TIM_Base_Stop_IT(&htim1);
@@ -460,7 +483,7 @@ void changemod(uint8_t mod){
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	 if (huart->Instance == USART1) {
-		 mod=rxByte-'0';
+		 mod=rxByte-'0';//do giá trị UART nhận được là ASCII nên -'0' để đưa về INT
 		 changemod(mod);
 		 HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxByte, 1);
 	 }
@@ -492,7 +515,7 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim){
 }
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if(GPIO_Pin==button_Pin){
-		if(HAL_GetTick() - last_tick > 200){
+		if(HAL_GetTick() - last_tick > 200){//tránh nhiễu
 			mod++;
 			if(mod > 3 && mod < 5) mod = 5;
 			if(mod > 5) mod = 1;
@@ -515,20 +538,14 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 		}
 	}
 }
-
+// Ham ITR cua ADC
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
     if(hadc->Instance == ADC1){
-        if(mod == 5){
-        	if(HAL_GetTick() - last_get > 200){
-        		adc_value= HAL_ADC_GetValue(&hadc1);
-        		uint16_t pwm_value = (adc_value * __HAL_TIM_GET_AUTORELOAD(&htim1))/4000;
-				__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pwm_value);
-				char buffer[20];
-				sprintf(buffer, "ADC: %d\r\n",  pwm_value);
-				printf_uart(buffer);
-				last_get = HAL_GetTick();
-        	}
-        }
+		adc_value= HAL_ADC_GetValue(&hadc1);
+		uint16_t pwm_value = (adc_value * __HAL_TIM_GET_AUTORELOAD(&htim1))/4000;
+		//công thức giúp đưa giá trị lấy được bằng ADC về cùng khoảng với giá trị ARR của TIM1
+		// vì giá trị cao nhất của ADC là 4095 nên chia 4000 để khi ADC đạt giá trị cao nhất thì sẽ là 1001+ khi đó đèn tắt hẵn
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pwm_value);
     }
 }
 
