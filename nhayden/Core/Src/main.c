@@ -65,6 +65,7 @@ ADC_HandleTypeDef hadc1;
 
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart1;
 
@@ -76,6 +77,10 @@ uint8_t flag_nhan=0;//luu gia tri khi nhan va tha cua nhun nhan
 uint8_t mod; //luu che do
 uint32_t last_tick=0;// bien luu lan nhan cuoi
 uint16_t adc_value;
+uint8_t count_sevor;//den so buoc
+uint8_t dem_vong=0;
+uint8_t last=0;
+uint8_t buoc=0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -85,6 +90,7 @@ static void MX_TIM2_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_ADC1_Init(void);
+static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim);
@@ -133,6 +139,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_TIM1_Init();
   MX_ADC1_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
   changemod(1);
   HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxByte, 1);
@@ -351,6 +358,66 @@ static void MX_TIM2_Init(void)
 }
 
 /**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 7;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 999;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_OC_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_TIMING;
+  sConfigOC.Pulse = 499;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_LOW;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_OC_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  __HAL_TIM_ENABLE_OCxPRELOAD(&htim3, TIM_CHANNEL_1);
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+  HAL_TIM_MspPostInit(&htim3);
+
+}
+
+/**
   * @brief USART1 Initialization Function
   * @param None
   * @retval None
@@ -402,6 +469,9 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, DIR_Pin|ENA_Pin, GPIO_PIN_RESET);
+
   /*Configure GPIO pin : button_Pin */
   GPIO_InitStruct.Pin = button_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
@@ -414,6 +484,20 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(led_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : DIR_Pin */
+  GPIO_InitStruct.Pin = DIR_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(DIR_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : ENA_Pin */
+  GPIO_InitStruct.Pin = ENA_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(ENA_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : Nhan3s_Pin */
   GPIO_InitStruct.Pin = Nhan3s_Pin;
@@ -450,14 +534,17 @@ void changeARR(uint16_t ARR){
 void changemod(uint8_t mod){
 	HAL_TIM_Base_Stop_IT(&htim2);
 	HAL_TIM_Base_Stop_IT(&htim1);
+	HAL_TIM_OC_Stop_IT(&htim3, TIM_CHANNEL_1);
 	__HAL_TIM_SET_COUNTER(&htim2, 0);
 	HAL_ADC_Stop_IT(&hadc1);
 	switch(mod){
 		case 1:
+			HAL_TIM_OC_Start_IT(&htim3, TIM_CHANNEL_1);
 			changeARR(4999);
 			printf_uart(" Mode 1\n");
 			break;
 		case 2:
+			HAL_TIM_OC_Start_IT(&htim3, TIM_CHANNEL_1);
 			changeARR(9999);
 			printf_uart(" Mode 2\n");
 			break;
@@ -483,8 +570,19 @@ void changemod(uint8_t mod){
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	 if (huart->Instance == USART1) {
-		 mod=rxByte-'0';//do giá trị UART nhận được là ASCII nên -'0' để đưa về INT
-		 changemod(mod);
+		 if(last==0 ){
+			 mod=rxByte-'0';//do giá trị UART nhận được là ASCII nên -'0' để đưa về INT
+		 	 changemod(mod);
+		 	 if(mod==3) last=1;
+		 }
+		 else{
+			 count_sevor = 0;
+			 if(rxByte-'0'!=0){
+				 buoc=rxByte-'0';
+				 HAL_TIM_OC_Start_IT(&htim3, TIM_CHANNEL_1);
+			 }
+			 else last=0;
+		 }
 		 HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxByte, 1);
 	 }
 }
@@ -494,6 +592,39 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		HAL_GPIO_TogglePin(led_GPIO_Port, led_Pin);
 	}
 }
+
+void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim)
+{
+   if(htim->Instance == TIM3){  // kiểm tra timer chứ không dùng Channel
+       if(mod==1 || mod==2){
+           if(++count_sevor == 200){
+              char buffer[20];
+              sprintf(buffer, "Vong %d\r\n", dem_vong++);
+              printf_uart(buffer);
+
+              if(mod==2){
+                  HAL_GPIO_TogglePin(DIR_GPIO_Port, DIR_Pin);
+              }
+              count_sevor = 0;
+           }
+       }
+       else {
+           char buffer[20];
+           sprintf(buffer, "%d\r\n", count_sevor);
+           printf_uart(buffer);
+
+           count_sevor++;
+           if(count_sevor > buoc){
+               sprintf(buffer, "Done\r\n");
+               printf_uart(buffer);
+               buoc = 0;
+               HAL_TIM_OC_Stop_IT(&htim3, TIM_CHANNEL_1);
+           }
+       }
+       __HAL_TIM_SET_COUNTER(htim, 0);
+   }
+}
+
 
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM1){

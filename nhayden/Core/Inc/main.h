@@ -64,6 +64,10 @@ void Error_Handler(void);
 #define button_EXTI_IRQn EXTI0_IRQn
 #define led_Pin GPIO_PIN_3
 #define led_GPIO_Port GPIOA
+#define DIR_Pin GPIO_PIN_1
+#define DIR_GPIO_Port GPIOB
+#define ENA_Pin GPIO_PIN_2
+#define ENA_GPIO_Port GPIOB
 #define Nhan3s_Pin GPIO_PIN_3
 #define Nhan3s_GPIO_Port GPIOB
 #define Nhan3s_EXTI_IRQn EXTI3_IRQn

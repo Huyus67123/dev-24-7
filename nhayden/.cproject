@@ -186,21 +186,6 @@
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
 	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets"/>
-	<storageModule moduleId="scannerConfiguration">
-		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
-		<scannerConfigBuildInfo instanceId="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.1214290878;com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.1214290878.;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.1451149680;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c.1288814948">
-			<autodiscovery enabled="false" problemReportingEnabled="true" selectedProfileId=""/>
-		</scannerConfigBuildInfo>
-		<scannerConfigBuildInfo instanceId="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.1214290878;com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.1214290878.;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.512329499;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.input.cpp.1878039227">
-			<autodiscovery enabled="false" problemReportingEnabled="true" selectedProfileId=""/>
-		</scannerConfigBuildInfo>
-		<scannerConfigBuildInfo instanceId="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.1358545779;com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.1358545779.;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.1574210897;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c.640584504">
-			<autodiscovery enabled="false" problemReportingEnabled="true" selectedProfileId=""/>
-		</scannerConfigBuildInfo>
-		<scannerConfigBuildInfo instanceId="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.1358545779;com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.1358545779.;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.108908033;com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.cpp.compiler.input.cpp.2017283834">
-			<autodiscovery enabled="false" problemReportingEnabled="true" selectedProfileId=""/>
-		</scannerConfigBuildInfo>
-	</storageModule>
 	<storageModule moduleId="refreshScope" versionNumber="2">
 		<configuration configurationName="Debug">
 			<resource resourceType="PROJECT" workspacePath="/nhayden"/>
@@ -209,4 +194,5 @@
 			<resource resourceType="PROJECT" workspacePath="/nhayden"/>
 		</configuration>
 	</storageModule>
+	<storageModule moduleId="scannerConfiguration"/>
 </cproject>
